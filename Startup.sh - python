@@ -1,0 +1,76 @@
+#!/bin/bash
+set -e
+
+export DISPLAY=:99
+export XAUTHORITY=/root/.Xauthority
+VNC_PORT=5900
+NOVNC_PORT=6080
+NOVNC_DIR="/opt/noVNC"
+APP_DIR="/app"
+REPORT_DIR="$APP_DIR/reports"
+
+echo "===================================================="
+echo "🚀 Starting Headless GUI Environment (XFCE + Chrome)"
+echo "===================================================="
+
+mkdir -p "$REPORT_DIR"/{screenshots,logs,allure,json}
+touch "$XAUTHORITY"
+
+# -----------------------------
+# Start virtual display
+# -----------------------------
+echo ">>> Starting Xvfb on display $DISPLAY ..."
+Xvfb "$DISPLAY" -screen 0 1920x1080x24 -ac +extension GLX +render -noreset &
+sleep 2
+
+# -----------------------------
+# Configure and start VNC
+# -----------------------------
+echo ">>> Configuring Xauthority ..."
+xauth add "$DISPLAY" . "$(mcookie)"
+
+echo ">>> Starting x11vnc server on port ${VNC_PORT} ..."
+x11vnc -forever -nopw -shared -display "$DISPLAY" -rfbport "$VNC_PORT" -auth "$XAUTHORITY" \
+  > "$REPORT_DIR/logs/x11vnc.log" 2>&1 &
+
+# -----------------------------
+# Start desktop and Chrome
+# -----------------------------
+unset SESSION_MANAGER
+echo ">>> Starting XFCE desktop environment ..."
+startxfce4 > "$REPORT_DIR/logs/xfce.log" 2>&1 &
+
+echo ">>> Launching Google Chrome (visible in GUI) ..."
+google-chrome --no-sandbox --disable-dev-shm-usage --disable-gpu --start-maximized > "$REPORT_DIR/logs/chrome.log" 2>&1 &
+
+# -----------------------------
+# Start noVNC web interface
+# -----------------------------
+echo ">>> Starting noVNC on port ${NOVNC_PORT} ..."
+/opt/noVNC/utils/websockify/run --web "$NOVNC_DIR" "$NOVNC_PORT" localhost:"$VNC_PORT" \
+  > "$REPORT_DIR/logs/novnc.log" 2>&1 &
+
+sleep 2
+echo ">>> ✅ GUI accessible at: http://localhost:${NOVNC_PORT}/vnc.html"
+echo ">>>    (Login: no password, just click 'Connect')"
+
+# -----------------------------
+# Run Behave in GUI terminal
+# -----------------------------
+cd "$APP_DIR"
+
+if [ -d "features" ]; then
+  echo ">>> Running Behave tests (GUI mode)..."
+  xfce4-terminal --title="Behave Tests" \
+    -e "bash -c 'DISPLAY=$DISPLAY behave -f pretty -f json -o $REPORT_DIR/behave-report.json 2>&1 | tee $REPORT_DIR/logs/behave.log; exec bash'" &
+else
+  echo "⚠️ No 'features' folder found. Opening desktop only."
+  xfce4-terminal --title="Desktop Shell" &
+fi
+
+echo "===================================================="
+echo "🟢 Container ready — access GUI at: http://localhost:${NOVNC_PORT}/vnc.html"
+echo "===================================================="
+
+# Keep container running
+tail -f /dev/null
