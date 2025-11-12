@@ -1,0 +1,44 @@
+# Image processing and comparison
+pymupdf
+pytesseract
+Pillow
+opencv-python
+numpy
+ 
+# Clipboard and screen automation
+pyperclip
+pyautogui
+mss
+ 
+# PDF and Excel handling
+PyPDF2
+openpyxl
+pdfminer.six
+ 
+# API and configuration
+requests
+pyyaml
+xmltodict
+ 
+# Web and mobile automation
+selenium==4.23.1
+appium-python-client
+ 
+# BDD and data handling
+behave
+pandas
+allure-behave
+ 
+# WebDriver management
+webdriver-manager
+ 
+# Databases and networking
+pymongo
+pyodbc
+mysql-connector-python
+paramiko
+ 
+# Visual testing
+percy
+percy-selenium
+pynput
