@@ -1,0 +1,81 @@
+# =========================================================
+# UNIVERSAL GUI DOCKERFILE (Playwright/Cucumber/Chrome)
+# Works on Windows, macOS, and Linux Docker Desktop
+# GUI: http://localhost:6080
+# =========================================================
+
+ARG NODE_VERSION=20
+FROM node:${NODE_VERSION}-slim
+
+LABEL maintainer="Universal GUI Playwright Environment"
+
+WORKDIR /app
+
+# ---------------------------
+# Install system dependencies
+# ---------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget curl unzip git gnupg2 xvfb x11vnc x11-utils net-tools supervisor \
+    xfce4 xfce4-terminal fonts-liberation dbus dbus-x11 sudo python3 python3-pip python3-venv \
+    python3-setuptools procps locales \
+    libappindicator3-1 libasound2 libatk-bridge2.0-0 libcups2 libnspr4 libnss3 \
+    libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libxtst6 xdg-utils ca-certificates \
+ && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------
+# Install Google Chrome
+# ---------------------------
+RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-linux-signing-keyring.gpg && \
+    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-linux-signing-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" \
+    > /etc/apt/sources.list.d/google-chrome.list && \
+    apt-get update && apt-get install -y google-chrome-stable && \
+    rm -rf /var/lib/apt/lists/*
+
+# ---------------------------
+# Install Allure CLI
+# ---------------------------
+RUN wget -q https://github.com/allure-framework/allure2/releases/download/2.30.0/allure-2.30.0.zip && \
+    unzip allure-2.30.0.zip -d /opt/allure && \
+    ln -s /opt/allure/allure-2.30.0/bin/allure /usr/local/bin/allure && \
+    rm allure-2.30.0.zip
+
+# ---------------------------
+# Setup noVNC + websockify
+# ---------------------------
+RUN git clone https://github.com/novnc/noVNC.git /app/novnc && \
+    git clone https://github.com/novnc/websockify.git /app/novnc/utils/websockify && \
+    python3 -m venv /opt/websockify-venv && \
+    /opt/websockify-venv/bin/pip install --no-cache-dir /app/novnc/utils/websockify
+
+# ---------------------------
+# Node project dependencies
+# ---------------------------
+COPY package*.json ./
+RUN npm install --legacy-peer-deps
+COPY . .
+
+RUN if [ -f package.json ] && grep -q "playwright" package.json; then \
+      npx playwright install --with-deps || true; \
+    fi
+
+# ---------------------------
+# Environment Variables
+# ---------------------------
+ENV DISPLAY=:99
+ENV CHROME_BIN="/usr/bin/google-chrome"
+ENV PATH="$PATH:/usr/local/bin:/usr/bin:/opt/websockify-venv/bin"
+ENV NO_AT_BRIDGE=1
+ENV DEBIAN_FRONTEND=noninteractive
+
+# ---------------------------
+# Startup script
+# ---------------------------
+COPY startup.sh /app/startup.sh
+RUN chmod +x /app/startup.sh
+
+# ---------------------------
+# Expose VNC + noVNC
+# ---------------------------
+EXPOSE 5900 6080
+
+CMD ["/app/startup.sh"]
