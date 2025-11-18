@@ -1,0 +1,132 @@
+FROM --platform=$BUILDPLATFORM python:3.11-slim-bullseye
+
+ENV DEBIAN_FRONTEND=noninteractive
+WORKDIR /app
+
+ENV DISPLAY=:99
+ENV NO_AT_BRIDGE=1
+ENV PATH="$PATH:/usr/local/bin:/usr/bin"
+ENV CHROME_BIN="/usr/bin/google-chrome"
+ENV CHROMEDRIVER="/usr/local/bin/chromedriver"
+
+# ----------------------------------------------------
+# 1️⃣ Base Dependencies
+# ----------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget curl unzip git gnupg2 ca-certificates xauth \
+    python3-dev build-essential pkg-config \
+    xvfb x11vnc x11-utils dbus-x11 \
+    libsm6 libxext6 libglib2.0-0 \
+    libffi-dev libssl-dev libxml2-dev libxslt1-dev \
+    unixodbc-dev default-libmysqlclient-dev mariadb-client \
+    tesseract-ocr lsb-release \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# ----------------------------------------------------
+# 2️⃣ XFCE Desktop + Chrome UI Dependencies
+# ----------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    xfce4 xfce4-terminal fonts-liberation \
+    libappindicator3-1 libasound2 libatk-bridge2.0-0 libcups2 \
+    libnspr4 libnss3 libxcomposite1 libxdamage1 libxfixes3 \
+    libxrandr2 libxtst6 xdg-utils \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# ----------------------------------------------------
+# 3️⃣ Mono
+# ----------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    dirmngr gnupg apt-transport-https ca-certificates \
+    && apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys A6A19B38D3D831EF \
+    && echo "deb https://download.mono-project.com/repo/debian stable main" \
+       > /etc/apt/sources.list.d/mono-official.list \
+    && apt-get update && apt-get install -y mono-complete \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# ----------------------------------------------------
+# 4️⃣ Google Chrome
+# ----------------------------------------------------
+RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub \
+    | gpg --dearmor -o /usr/share/keyrings/google-linux-signing-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/google-linux-signing-keyring.gpg] \
+    http://dl.google.com/linux/chrome/deb/ stable main" \
+       > /etc/apt/sources.list.d/google-chrome.list \
+    && apt-get update && apt-get install -y google-chrome-stable \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# ----------------------------------------------------
+# 5️⃣ noVNC + Websockify
+# ----------------------------------------------------
+RUN mkdir -p /opt \
+    && git clone --depth=1 https://github.com/novnc/noVNC.git /opt/noVNC \
+    && git clone --depth=1 https://github.com/novnc/websockify.git /opt/noVNC/utils/websockify \
+    && ln -s /opt/noVNC/vnc.html /opt/noVNC/index.html
+
+# ----------------------------------------------------
+# 6️⃣ ChromeDriver (Auto-match Chrome)
+# ----------------------------------------------------
+RUN set -eux; \
+    CHROME_VERSION=$(google-chrome --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "0.0.0"); \
+    MAJOR_VERSION=$(echo "$CHROME_VERSION" | cut -d. -f1); \
+    DRIVER_VERSION=$(curl -sSfL "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_${MAJOR_VERSION}" || true); \
+    if [ -z "$DRIVER_VERSION" ]; then \
+        DRIVER_VERSION=$(curl -sSfL "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE"); \
+    fi; \
+    wget -q "https://storage.googleapis.com/chrome-for-testing-public/${DRIVER_VERSION}/linux64/chromedriver-linux64.zip" \
+        -O /tmp/chromedriver.zip; \
+    unzip -q /tmp/chromedriver.zip -d /usr/local/bin/; \
+    mv /usr/local/bin/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver; \
+    chmod +x /usr/local/bin/chromedriver; \
+    rm -rf /tmp/* /usr/local/bin/chromedriver-linux64
+
+# ----------------------------------------------------
+# ⭐ 7️⃣ Allure CLI — FIXED (Correct Folder Name)
+# ----------------------------------------------------
+RUN wget -qO /tmp/allure.zip \
+    https://repo.maven.apache.org/maven2/io/qameta/allure/allure-commandline/2.29.0/allure-commandline-2.29.0.zip \
+    && unzip /tmp/allure.zip -d /opt/ \
+    && mv /opt/allure-2.29.0 /opt/allure \
+    && ln -s /opt/allure/bin/allure /usr/bin/allure \
+    && rm -f /tmp/allure.zip
+
+# ----------------------------------------------------
+# 8️⃣ Python Dependencies
+# ----------------------------------------------------
+COPY requirements.txt .
+RUN pip install --upgrade pip setuptools wheel \
+    && pip install --no-cache-dir -r requirements.txt --prefer-binary \
+    && pip install --no-cache-dir opencv-python pyautogui Pillow pyscreenshot
+
+# ----------------------------------------------------
+# 9️⃣ Project Files
+# ----------------------------------------------------
+COPY . .
+
+RUN mkdir -p \
+    /app/output \
+    /app/allure-results \
+    /app/allure-report \
+    /app/features/TestReports \
+    && chmod -R 777 /app
+
+# ----------------------------------------------------
+# 🔟 Ports
+# ----------------------------------------------------
+EXPOSE 6080 5900
+
+# ----------------------------------------------------
+# 1️⃣1️⃣ Startup Script
+# ----------------------------------------------------
+COPY startup.sh /startup.sh
+RUN chmod +x /startup.sh
+
+# ----------------------------------------------------
+# 🌍 Locale
+# ----------------------------------------------------
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+
+# ----------------------------------------------------
+# 🏁 Default CMD
+# ----------------------------------------------------
+CMD ["/startup.sh"]
