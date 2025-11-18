@@ -97,6 +97,13 @@ RUN pip install --upgrade pip setuptools wheel \
     && pip install --no-cache-dir -r requirements.txt --prefer-binary \
     && pip install --no-cache-dir opencv-python pyautogui Pillow pyscreenshot
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openjdk-11-jdk \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+ENV JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
+ENV PATH="$JAVA_HOME/bin:$PATH"
+
 # ----------------------------------------------------
 # 9️⃣ Project Files
 # ----------------------------------------------------
