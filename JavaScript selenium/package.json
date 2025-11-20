@@ -1,0 +1,30 @@
+{
+  "name": "Algoshackjavascriptseleniumproject",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "cucumber-js --import common/**/*.js --import stepdefinitions/**/*.js --import workflows/**/*.js --format @cucumber/pretty-formatter --format json:cucumber_report.json features && node generate-html-report.js",
+    "report": "node generate-html-report.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@cucumber/cucumber": "^10.3.1",
+    "@cucumber/messages": "^25.0.0",
+    "@cucumber/pretty-formatter": "^1.0.0",
+    "selenium-webdriver": "^4.21.0",
+    "chai": "^4.3.6",
+    "cucumber-html-reporter": "^5.5.1",
+    "allure-commandline": "^2.20.1",
+    "allure-cucumberjs": "^2.9.1"
+  },
+  "dependencies": {
+    "clipboardy": "^4.0.0",
+    "js-yaml": "^4.1.0",
+    "webdriver-manager": "^12.1.8",
+    "winston": "^3.17.0",
+    "xml2js": "^0.4.23"
+  }
+}
