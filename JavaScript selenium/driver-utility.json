@@ -1,0 +1,162 @@
+/**
+ * @file driverUtil.js
+ * @description Universal WebDriver initializer for Chrome, Firefox & Edge.
+ *              Fully compatible with Docker, Xvfb, Windows, Linux, Mac.
+ * @company AlgoShack Technologies Pvt Ltd
+ */
+
+import { Builder } from "selenium-webdriver";
+import chrome from "selenium-webdriver/chrome.js";
+import firefox from "selenium-webdriver/firefox.js";
+import edge from "selenium-webdriver/edge.js";
+import commonUtil from "./common-util.js";
+import path from "path";
+import fs from "fs";
+
+class DriverUtil {
+  static driver = null;
+
+  static async initDriver() {
+    try {
+      const downloadEnabled =
+        commonUtil.getXmlData("DownloadInCurrentDirectory").toLowerCase() ===
+        "true";
+
+      const browserRaw = commonUtil.getXmlData("BrowserType").trim();
+      const browser = browserRaw.toLowerCase();
+
+      const downloadDir = path.join(process.cwd(), "attachments");
+      if (!fs.existsSync(downloadDir)) fs.mkdirSync(downloadDir);
+
+      console.log(`>>> Initializing ${browserRaw} driver...`);
+
+      let builder = new Builder();
+      let driverOptions = null;
+
+      // -----------------------------------------------------------
+      // CHROME
+      // -----------------------------------------------------------
+      if (browser.includes("chrome")) {
+        driverOptions = new chrome.Options();
+
+        // 🔥 Critical for Docker — prevents Chrome crash
+        driverOptions.addArguments(
+          "--no-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-gpu",
+          "--disable-software-rasterizer",
+          "--remote-debugging-port=9222",
+          "--disable-infobars",
+          "--disable-blink-features=AutomationControlled",
+          "--disable-notifications"
+        );
+
+        // enable headless mode
+        if (browser.includes("headless")) {
+          driverOptions.addArguments("--headless=new");
+        }
+
+        // download handling
+        if (downloadEnabled) {
+          driverOptions.setUserPreferences({
+            "download.default_directory": downloadDir,
+            "download.prompt_for_download": false,
+            "download.directory_upgrade": true,
+            "safebrowsing.enabled": true
+          });
+        }
+
+        builder.setChromeOptions(driverOptions).forBrowser("chrome");
+      }
+
+      // -----------------------------------------------------------
+      // FIREFOX
+      // -----------------------------------------------------------
+      else if (browser.includes("firefox")) {
+        driverOptions = new firefox.Options();
+
+        if (browser.includes("headless")) {
+          driverOptions.addArguments("--headless");
+        }
+
+        if (downloadEnabled) {
+          driverOptions.setPreference("browser.download.folderList", 2);
+          driverOptions.setPreference("browser.download.dir", downloadDir);
+          driverOptions.setPreference(
+            "browser.helperApps.neverAsk.saveToDisk",
+            "application/pdf,application/octet-stream,text/csv"
+          );
+        }
+
+        builder.setFirefoxOptions(driverOptions).forBrowser("firefox");
+      }
+
+      // -----------------------------------------------------------
+      // EDGE
+      // -----------------------------------------------------------
+      else if (browser.includes("edge")) {
+        driverOptions = new edge.Options();
+
+        driverOptions.addArguments(
+          "--no-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-gpu"
+        );
+
+        if (browser.includes("headless")) {
+          driverOptions.addArguments("--headless=new");
+        }
+
+        if (downloadEnabled) {
+          driverOptions.setUserPreferences({
+            "download.default_directory": downloadDir,
+            "download.prompt_for_download": false
+          });
+        }
+
+        builder.setEdgeOptions(driverOptions).forBrowser("MicrosoftEdge");
+      }
+
+      // -----------------------------------------------------------
+      // UNSUPPORTED BROWSER
+      // -----------------------------------------------------------
+      else {
+        throw new Error(`Unsupported browser type: ${browserRaw}`);
+      }
+
+      // -----------------------------------------------------------
+      // BUILD DRIVER (Selenium Manager auto-installs driver)
+      // -----------------------------------------------------------
+      this.driver = await builder.build();
+
+      await this.driver.manage().setTimeouts({
+        implicit: 10000,
+        pageLoad: 20000,
+        script: 20000
+      });
+
+      global.driver = this.driver;
+      console.log(`>>> ${browserRaw} driver initialized successfully`);
+
+    } catch (error) {
+      console.error("❌ Failed to initialize driver:", error);
+      throw error;
+    }
+  }
+
+  static async getDriver() {
+    return this.driver;
+  }
+
+  static async quitDriver() {
+    try {
+      if (this.driver) {
+        await this.driver.quit();
+        this.driver = null;
+        global.driver = null;
+      }
+    } catch (_) {}
+  }
+}
+
+export default DriverUtil;
