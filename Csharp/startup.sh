@@ -1,74 +1,58 @@
 #!/bin/bash
 set -e
 
-APP_DIR=/app
 export DISPLAY=:99
-export PATH=$PATH:/usr/local/bin:/usr/bin
+export XAUTHORITY=/root/.Xauthority
+APP_DIR="/app"
+LOG_DIR="$APP_DIR/logs"
 
-echo "-------------------------------------------------"
-echo "Starting Virtual Display (Xvfb)"
-echo "-------------------------------------------------"
-Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset > $APP_DIR/xvfb.log 2>&1 &
-sleep 2
+VNC_PORT=5900
+NOVNC_PORT=6080
+NOVNC_DIR="/opt/noVNC"
 
-echo "-------------------------------------------------"
-echo "Starting dbus"
-echo "-------------------------------------------------"
+mkdir -p "$LOG_DIR"
+touch "$XAUTHORITY"
+
+echo "Starting Xvfb..."
+Xvfb :99 -screen 0 1920x1080x24 -ac >"$LOG_DIR/xvfb.log" 2>&1 &
+sleep 3
+
+echo "Starting dbus..."
 mkdir -p /var/run/dbus
-dbus-daemon --system --address=unix:path=/var/run/dbus/system_bus_socket \
-  --nofork --nopidfile > $APP_DIR/dbus.log 2>&1 &
+dbus-daemon --system --fork >"$LOG_DIR/dbus.log" 2>&1 || true
 sleep 1
 
-echo "-------------------------------------------------"
-echo "Starting x11vnc"
-echo "-------------------------------------------------"
-x11vnc -display :99 -forever -nopw -shared -rfbport 5900 > $APP_DIR/x11vnc.log 2>&1 &
+echo "Starting x11vnc..."
+x11vnc -display :99 -forever -nopw -shared -rfbport $VNC_PORT >"$LOG_DIR/x11vnc.log" 2>&1 &
 sleep 2
 
-echo "-------------------------------------------------"
-echo "Starting noVNC"
-echo "-------------------------------------------------"
-nohup /opt/noVNC/utils/novnc_proxy \
-  --vnc localhost:5900 \
-  --listen 6080 > $APP_DIR/novnc.log 2>&1 &
+echo "Starting XFCE..."
+startxfce4 >"$LOG_DIR/xfce.log" 2>&1 &
+sleep 7
+
+echo "Starting noVNC..."
+$NOVNC_DIR/utils/novnc_proxy --vnc localhost:$VNC_PORT --listen $NOVNC_PORT >"$LOG_DIR/novnc.log" 2>&1 &
 sleep 3
 
-echo "-------------------------------------------------"
-echo "Starting XFCE Desktop"
-echo "-------------------------------------------------"
-nohup startxfce4 > $APP_DIR/xfce.log 2>&1 &
-sleep 12
+# -------------------------------
+# 🟢 OPEN TERMINAL + RUN TESTS AUTO
+# -------------------------------
+CS_PROJ=$(find "$APP_DIR" -name "*.csproj" | head -n 1)
 
-echo "-------------------------------------------------"
-echo "Starting XFCE Terminal with single WDIO execution"
-echo "-------------------------------------------------"
+echo "Opening Terminal + starting feature execution..."
 
-# Run tests ONLY inside terminal (one time)
-xfce4-terminal --hold -e "bash -c '
-    cd /app;
-
-    echo \"Running WebdriverIO / Cucumber Tests...\";
-    echo \"----------------------------------------------\";
-
-    # Run WDIO only once
-    if [ -f wdio.conf.js ]; then
-        npx wdio run wdio.conf.js;
-    else
-        npm run test;
-    fi
-
-    echo \"----------------------------------------------\";
-    echo \"Tests Completed — Logs visible above\";
-    echo \"----------------------------------------------\";
-
-    exec bash
-'" &
-
+xfce4-terminal --title="Feature Execution" \
+  --geometry=120x30 \
+  -e "bash -c '
+      echo Building project...;
+      dotnet build $CS_PROJ -c Release;
+      echo Running Feature Files...;
+      dotnet test $CS_PROJ --logger:\"trx;LogFileName=test_results.trx\";
+      echo ALL TESTS FINISHED!;
+      exec bash
+  '" &
 sleep 3
 
-echo "-------------------------------------------------"
-echo "GUI Ready — Single WDIO test execution only"
-echo "Open in browser: http://localhost:6080/vnc.html"
-echo "-------------------------------------------------"
+echo "Environment ready. Access GUI → http://localhost:${NOVNC_PORT}/vnc.html"
 
 tail -f /dev/null
