@@ -6,6 +6,7 @@
 
 FROM --platform=$BUILDPLATFORM python:3.11-slim-bullseye
 
+MAINTAINER CHENNAKESAVULU
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
 ENV DISPLAY=:99
