@@ -5,7 +5,7 @@
 
 FROM mcr.microsoft.com/dotnet/sdk:9.0
 
-LABEL maintainer="Universal C# Selenium Environment <devops@universal>"
+LABEL maintainer="CHENNAKESAVULU"
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV DISPLAY=:99
