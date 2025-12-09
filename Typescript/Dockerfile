@@ -7,7 +7,7 @@
 ARG NODE_VERSION=20
 FROM node:${NODE_VERSION}-slim
 
-LABEL maintainer="Universal GUI Playwright Environment"
+LABEL maintainer="CHENNAKESAVULU"
 
 WORKDIR /app
 
