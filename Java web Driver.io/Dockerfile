@@ -5,6 +5,7 @@
 
 FROM node:20-bullseye
 
+MAINTAINER CHENNAKESAVULU
 ENV DEBIAN_FRONTEND=noninteractive
 
 # ---------------------------------------------------------------
